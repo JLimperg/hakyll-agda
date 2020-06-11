@@ -35,7 +35,7 @@ import           Hakyll.Core.Compiler
 import           Hakyll.Core.Identifier
 import           Hakyll.Core.Item
 import           Hakyll.Web.Pandoc
-import           System.Directory (getCurrentDirectory, setCurrentDirectory, canonicalizePath, setCurrentDirectory)
+import           System.Directory (withCurrentDirectory, canonicalizePath)
 import           System.Exit (exitFailure)
 import           System.FilePath (dropFileName, splitExtension)
 import           Text.Pandoc (readMarkdown, ReaderOptions, WriterOptions)
@@ -172,11 +172,6 @@ isAgda i = ex == ".lagda"
   where
     ex = snd . splitExtension . toFilePath . itemIdentifier $ i
 
-saveDir :: IO a -> IO a
-saveDir m = do
-    origDir <- getCurrentDirectory
-    m <* setCurrentDirectory origDir
-
 pandocAgdaCompilerWith :: ReaderOptions -> WriterOptions -> CommandLineOptions
                        -> Compiler (Item String)
 pandocAgdaCompilerWith ropt wopt aopt = do
@@ -186,17 +181,17 @@ pandocAgdaCompilerWith ropt wopt aopt = do
         fp <- getResourceFilePath
         -- TODO get rid of the unsafePerformIO, and have a more solid
         -- way of getting the absolute path
-        unsafeCompiler $ saveDir $ do
-             -- We set to the directory of the file, we assume that
-             -- the agda files are in one flat directory which might
-             -- not be not the one where Hakyll is ran in.
-             abfp <- canonicalizePath fp
-             setCurrentDirectory (dropFileName abfp)
-             s <- markdownAgda aopt "Agda" (SourceFile $ mkAbsolute abfp)
-             let i' = i {itemBody = T.pack s}
-             case Pandoc.runPure (traverse (readMarkdown ropt) i') of
-               Left err -> fail $ "pandocAgdaCompilerWith: Pandoc failed with error " ++ show err
-               Right i'' -> return $ writePandocWith wopt i''
+        agdaMarkdown <- unsafeCompiler $ do
+          -- We set to the directory of the file, we assume that
+          -- the agda files are in one flat directory which might
+          -- not be not the one where Hakyll is ran in.
+          abfp <- canonicalizePath fp
+          withCurrentDirectory (dropFileName abfp) $
+            markdownAgda aopt "Agda" (SourceFile $ mkAbsolute abfp)
+        let i' = i {itemBody = T.pack agdaMarkdown}
+        case Pandoc.runPure (traverse (readMarkdown ropt) i') of
+          Left err -> fail $ "pandocAgdaCompilerWith: Pandoc failed with error " ++ show err
+          Right i'' -> return $ writePandocWith wopt i''
       else pandocCompilerWith ropt wopt
   where
     cacheName = "LiterateAgda.pandocAgdaCompilerWith"
