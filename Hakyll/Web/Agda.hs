@@ -59,11 +59,9 @@ getModule m = do
 
 pairPositions :: HighlightingInfo -> String -> [(Integer, String, Aspects)]
 pairPositions info contents =
-    map (\cs@((mi, (pos, _)) : _) -> (toInteger pos, map (snd . snd) cs, maybe mempty id mi)) $
+    map (\cs@((mi, (pos, _)) : _) -> (toInteger pos, map (snd . snd) cs, fromMaybe mempty mi)) $
     groupBy ((==) `on` fst) $
-    map (\(pos, c) -> (IntMap.lookup pos infoMap, (pos, c))) $
-    zip [1..] $
-    contents
+    zipWith (\pos c -> (IntMap.lookup pos infoMap, (pos, c))) [1..] contents
   where
     infoMap = toMap (decompress info)
 
@@ -146,7 +144,7 @@ toMarkdown classpr m contents =
                   Left s   -> s
                   Right cs ->
                       let h = pre . tag "code" . mconcat $
-                              [ (annotate m pos mi (stringToHtml s))
+                              [ annotate m pos mi (stringToHtml s)
                               | (pos, s, mi) <- cs ]
                       in  renderHtmlFragment (h ! [theclass classpr])
            | c <- contents ]
